@@ -1,7 +1,7 @@
 README
 
 Requirements
-- Windows OS
+- Windows or Mac OS
 - Python 3.7 environment
 
 Installation
