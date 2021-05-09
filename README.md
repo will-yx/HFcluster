@@ -1,8 +1,8 @@
 README
 
 Requirements
-- Windows or Mac OS
-- Python 3.7 environment
+- Python 3.6+ environment
+- TissueSimGPU requires Windows or Linux with CUDA 10.1+
 
 Installation
 - copy notebook, HFcluster.py, my_fcswrite.py, xkcd_hexcol.csv, dependencies.txt into the same folder

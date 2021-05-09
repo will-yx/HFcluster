@@ -13,9 +13,9 @@ from ctypes import *
 from _ctypes import FreeLibrary
 
 def fill(df, colname, outdir, runs, X='x:x', Y='y:y', mask_dist=100, max_dist=1000):
-  libSpaCE = CDLL("N:/Will's CODEX pipeline/SpaCE.dll")
+  libFlood = CDLL("flood.dll")
   
-  c_neighborhood_floodfill = libSpaCE.neighborhood_floodfill
+  c_neighborhood_floodfill = libFlood.neighborhood_floodfill
   c_neighborhood_floodfill.restype = None
   c_neighborhood_floodfill.argtypes = [POINTER(c_byte), c_int, c_int, c_int, c_int]
   
@@ -48,4 +48,4 @@ def fill(df, colname, outdir, runs, X='x:x', Y='y:y', mask_dist=100, max_dist=10
       
       print('Saving flooded tissue neighborhoods for '+run+' Region '+str(reg))
       io.imsave(os.path.join(outdir_flood, run+'_'+str(reg)+'nicheflood.tif'), seed[0].astype(np.uint8), check_contrast=False)
-  FreeLibrary(libSpaCE._handle)
+  FreeLibrary(libFlood._handle)
