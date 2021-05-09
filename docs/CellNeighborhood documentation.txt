@@ -1,0 +1,60 @@
+CellNeighborhood documentation
+
+CellNeighborhood contains two methods to detect spatial neighbors for index cells. The find() function is a modified version of cell neighborhood detection using spatial k-Nearest-Neighbors from Schuch et al. "Coordinated Cellular Neighborhoods Orchestrate Antitumoral Immunity at the Colorectal Cancer Invasive Front" (Cell 2020).
+
+######################
+CellNeighborhood.find(data_df, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 10, n_neighborhoods = 15, drop=False, plot=True)
+	performs kNN on spatial (X-Y) coordinates of each cell to generate a neighbors adjacency matrix and performs mini-kMeans clustering to identify indexed neighborhoods containing similar distributions of cell types, as implemented in Schuch et al., Cell 2020.
+
+	data_df - DataFrame containing CODEX data from 1 or more tissues
+		tissues should be uniquely indexed by "RunID" and "RegionID" levels of a MultiIndex
+
+	outdir - path to where plots should be saved
+
+	X - column name of data_df containing the X coordinate of each cell
+
+	Y - column name of data_df containing the Y coordinate of each cell
+
+	cluster_col - column name of data_df containing the annotation or class of each cell
+
+	k - number of neighbors (kNN) to be detected for each index cell
+
+	n_neighborhoods - number of centroids for kMeans clustering on neighborhood windows
+
+	drop - list - cell annotation classes that should be excluded from neighborhood analysis
+		example: ["Unassigned"] - cells with unknown or lack of distinguishing marker expression 
+
+	plot - show and save the logOddsRatio for enrichment of cell types within clustered cell neighborhood over average numbers across all tissues
+		shown as a clustered heatmap of log2Enrichment - Red is enriched within the neighborhood and Blue is displaced from the neighborhood
+
+	Return:
+	data_df - modified data_df with the kMeans cluster IDs appended as 'kmeans_neighborhood' columns
+	windows - DataFrame of each cell from data_df and the classes of its k nearest neighbors
+		this df facilitates visualization of the neighborhood structure with dimensional reduction apporaches (UMAP, tSNE) and application of more advanced alternative clustering methods such as leiden/louvain, DBScan, etc. 
+
+	*** In testing, kMeans tends to under estimate neighborhood complexity and lead to spurious merging of neighborhoods, thus subsequent reclustering using the windows DataFrame is highly recommended
+
+
+CellNeighborhood.delaunay(data_df, cluster_col='CelltypeName', drop=[], X='x:x', Y='y:y')
+	performs delaunay triangulation on spatial (X-Y) coordinates of each cell to identify immediately adjacent neighbors of each index cell to estimate cell-cell contact interactions and does not require user defined "k" constant.
+
+	data_df - DataFrame containing CODEX data from 1 or more tissues
+		tissues should be uniquely indexed by "RunID" and "RegionID" levels of a MultiIndex
+	
+	cluster_col - column name of data_df containing the annotation or class of each cell
+
+	drop - list - cell annotation classes that should be excluded from neighborhood analysis
+		example: ["Unassigned"] - cells with unknown or lack of distinguishing marker expression 
+	
+	X - column name of data_df containing the X coordinate of each cell
+
+	Y - column name of data_df containing the Y coordinate of each cell
+
+	Return:
+	delaunay_ids - DataFrame of each cell from data_df and the CellID of its Delaunay neighbors
+
+	delaunay_annos - DataFrame of each cell from data_df and the classes of its Delaunay neighbors
+		this df facilitates visualization of the neighborhood structure with dimensional reduction apporaches (UMAP, tSNE) and application of more advanced alternative clustering methods such as leiden/louvain, DBScan, etc. 
+
+	*** Delaunay trianglulation does not return the same number of neighbors for each cell and thus may need to be normalized prior to clustering.
+

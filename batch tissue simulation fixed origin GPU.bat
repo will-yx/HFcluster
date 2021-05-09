@@ -1,0 +1,1 @@
+python -m idlelib "TissueSimGPU.py" 2>&1

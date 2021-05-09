@@ -1,0 +1,52 @@
+Split.py Documentation
+
+Installation
+Copy Split.py into the folder that contains HFcluster.py
+
+#################################################
+Split.plotBiaxial(input, Ch_x, Ch_y, Ch_c=False, log=False)
+	input - dataFrame - containing a subset of cells, i.e. a cell type cluster
+		example: to call celltype cluster 25 use - data_all.loc[data_all['mergedID']==25] 
+
+	Ch_x - string - the channel name for the x-axis
+		example: 'cyc001_ch004:CD31'
+		
+	Ch_y - string - the channel name for the y-axis
+		example: 'cyc009_ch003:CD45'
+		
+	Ch_c - *optional* string - the channel name to use for the color of each dot
+		example: 'cyc009_ch004:CD16/32'
+
+	log - Boolean - log transform X and Y axis
+
+	Return: dataFrame, indices of selected points
+	
+	Example in Notebook: 
+		import Split
+		data, sel_idx = Split.plotBiaxial(data_all.loc[data_all['mergedID']==25], 'cyc001_ch004:CD31', 'cyc009_ch003:CD45','cyc009_ch004:CD16/32')
+
+
+Split.getSelectCells(data, sel_idx)
+	dataFrame - dataFrame - the output from Split.plotBiaxial
+	
+	sel_idx - indices of selected cells from the biaxial plot
+	
+	Return: CellID values of selected cells
+	
+	Example in Notebook: 
+		newClusterIndex = Split.getSelectCells(data, sel_idx)
+
+
+Split.newCluster(input, colname, idx)
+	input - dataFrame - containing all cells
+		example: data_all
+		
+	colname - string - column name of cluster ID
+		example: 'mergedID'
+		
+	idx - output from Split.getSelectCells
+	
+	Return: Updated dataframe with new cluster that contains cells with the indices in idx
+
+	Example in Notebook:
+		data_all = Split.newCluster(data_all, 'mergedID', newClusterIndex)
