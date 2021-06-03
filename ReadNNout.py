@@ -63,8 +63,8 @@ def cleanup_classification(img):
   flooded = np.ascontiguousarray(np.zeros([2, h, w], dtype=np.uint8))
   flooded[0] = img
   
-  libSpaCE = CDLL('SpaCE.dll')
-  c_neighborhood_floodfill = libSpaCE.neighborhood_floodfill
+  libFlood = CDLL('flood.dll')
+  c_neighborhood_floodfill = libFlood.neighborhood_floodfill
   c_neighborhood_floodfill.restype = None
   c_neighborhood_floodfill.argtypes = [POINTER(c_byte), c_int, c_int, c_int, c_int]
   
@@ -72,7 +72,7 @@ def cleanup_classification(img):
   c_neighborhood_floodfill(flooded.ctypes.data_as(POINTER(c_byte)), w, h, ncls, maxdist)
   t1 = timer(); print("GPU floodfill: %.1fs" % (t1 - t0)); t0=t1;
   
-  free_libs([libSpaCE])
+  free_libs([libFlood])
   
   out = flooded[0]
   
