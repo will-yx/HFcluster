@@ -438,7 +438,7 @@ def save_as_CSV(data_all, runs, outdir):
 				filename = outdir_run+h+'_'+str(i)+'_compensated.csv'
 				export_csv = df.to_csv (filename, index=True, header=True)
 				print("Wrote data to '{:}'".format(os.path.basename(filename)))
-		except: print("Failed to write CSV file for "+h+" region "+i+"!")
+		except: continue
 
 def save_as_FCS(data_all, runs, outdir):
 	newDir(outdir)
@@ -466,7 +466,7 @@ def save_as_FCS(data_all, runs, outdir):
 				filename = outdir_run+'reg{:03d}_compensated.fcs'.format(i)
 				write_fcs(filename, df, channel_stain, channel_cycle)
 				print("Wrote data to '{:}'".format(os.path.basename(filename)))
-		except: print("Failed to write FCS file for "+h+" region "+i+"!")
+		except: continue
 
 def generateTissueArray(df, X, Y, shift = 10000):
 	run2idx = {r:i for i,r in enumerate(sorted(np.unique(df.index.get_level_values('RunID').values)))}
