@@ -12,3 +12,6 @@ scipy
 scikit-image
 kneed
 dill
+python-igraph
+louvain
+leidenalg
