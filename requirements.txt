@@ -13,5 +13,5 @@ seaborn
 plotly
 scanpy
 python-igraph
-louvain-igraph
+louvain
 leidenalg
