@@ -8,18 +8,9 @@ Installation
 - copy notebook, HFcluster.py, my_fcswrite.py, xkcd_hexcol.csv, dependencies.txt into the same folder
 - in command prompt: pip install -r dependencies.txt
 
-For Windows: please also download the following python modules from this website:
+For Windows if you are having problems compiling the the following modules (python-igraph, louvain, leidenalg) try downloading pre-compiled wheels from this website
 https://www.lfd.uci.edu/~gohlke/pythonlibs/
-
-Python-igraph:
-python_igraph-0.7.1.post6-cp37-cp37m-win_amd64.whl
-
-louvain-igraph:
-louvain-0.6.1-cp37-cp37m-win_amd64.whl
-
-leidenalg:
-leidenalg-0.7.0-cp37-cp37m-win_amd64.whl
-
+or use conda to install them
 
 CSV file structure
 ~~~~
