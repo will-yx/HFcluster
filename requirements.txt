@@ -15,3 +15,4 @@ scanpy
 python-igraph
 louvain
 leidenalg
+fastcluster
