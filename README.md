@@ -6,7 +6,7 @@ Requirements
 
 Installation
 - copy notebook, HFcluster.py, my_fcswrite.py, xkcd_hexcol.csv, dependencies.txt into the same folder
-- in command prompt: pip install -r dependencies.txt
+- in command prompt: pip install -r requirements.txt
 
 For Windows if you are having problems compiling the the following modules (python-igraph, louvain, leidenalg) try downloading pre-compiled wheels from this website
 https://www.lfd.uci.edu/~gohlke/pythonlibs/
