@@ -257,7 +257,10 @@ def hierach_merge(data_all, g, label_array, axis='rows', method='distance', c=0.
 	else: raise NameError('method can only be "distance" or "max"')
 	merged_labels = [clusters[i-1] for i in label_array]
 	merged_labels=pd.Series(np.asarray(merged_labels), dtype="category")
-	merged_labels.index = data_all.index
+	if axis=='rows':
+		merged_labels.index = data_all.index
+	elif axis=='cols'
+        merged_labels.index = data_all.columns
 	return merged_labels
 
 def setParams(**kwargs):

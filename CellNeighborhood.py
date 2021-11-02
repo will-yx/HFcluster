@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 
 
-def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 10, n_neighborhoods = 15, drop=False, plot=True):
+def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 10, n_neighborhoods = 15, drop=False, plot=False):
 	
 	def get_windows(job,n_neighbors):
 		'''
@@ -56,14 +56,12 @@ def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 1
 
 	neighbor_data = data_all.loc[:,[X, Y, cluster_col]]
 	if drop:
-		for i in drop:
-			neighbor_data = neighbor_data.loc[neighbor_data[cluster_col] != i]
+		neighbor_data = neighbor_data.loc[[type not in drop for type in neighbor_data[cluster_col]]]
 	celltypes = neighbor_data[cluster_col].unique().tolist()
 	neighbor_data[reg] = neighbor_data.index.get_level_values('RunID') + "_" + neighbor_data.index.get_level_values('RegionID').map(str)
 	files = neighbor_data.Sample.unique().tolist()
-	neighbor_data = neighbor_data.reset_index(drop = True)
 
-	cells = pd.concat([neighbor_data,pd.get_dummies(neighbor_data[cluster_col])],1)
+	cells = pd.concat([neighbor_data.reset_index(drop = True),pd.get_dummies(neighbor_data.reset_index(drop = True)[cluster_col])],1)
 	sum_cols = cells[cluster_col].unique()
 	values = cells[sum_cols].values
 
@@ -87,6 +85,7 @@ def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 1
 	window = pd.concat([pd.DataFrame(out_dict[(exp,k)][0],index = out_dict[(exp,k)][1].astype(int),columns = sum_cols) for exp in exps],0)
 	window = window.loc[cells.index.values]
 	window = pd.concat([cells[keep_cols],window],1)
+	window.index = neighbor_data.index
 
 	km = MiniBatchKMeans(n_clusters = n_neighborhoods,random_state=0)
 	labelskm = km.fit_predict(window[sum_cols].values)
@@ -159,3 +158,53 @@ def delaunay_neighbors(codex_df, cluster_col='CelltypeName', drop=[], X='x:x', Y
 			delaunay_ids = delaunay_ids.append(tissue_niche_neighbors)
 			delaunay_annos = delaunay_annos.append(tissue_niche_types)
 	return delaunay_ids, delaunay_annos	
+
+def neighborhood_enrichment(df, neighbor_col, celltype_col, default_col='cell_id:cell_id', save=False, **kwargs):
+	tissue_avgs = df.groupby(celltype_col).count()[default_col]
+	tissue_avgs = tissue_avgs/sum(tissue_avgs)
+	niche_clusters = df.groupby([neighbor_col,celltype_col]).count()[default_col].reset_index().pivot(index=neighbor_col,columns=celltype_col).apply(lambda x: x/sum(x), axis=1)
+	niche_clusters.columns = niche_clusters.columns.droplevel()
+
+	fc = np.log2((niche_clusters+tissue_avgs)/(niche_clusters+tissue_avgs).values.sum(axis=1,keepdims=True)/tissue_avgs)
+
+	divergmap = sns.diverging_palette(250, 1, s=90, l=50, sep=10, center='light', as_cmap=True)
+	s=sns.clustermap(fc, cmap=divergmap, **kwargs)
+	ax = s.ax_heatmap
+	ax.set_xlabel("Celltypes")
+	ax.set_ylabel("Neighborhood IDs")
+
+	if save:
+		plt.savefig(save+".svg", format="svg")
+	return fc, s
+		
+def leiden_cluster(df, niches, celltype_col='CelltypeName', resolution=0.5, cluster_size_filter=1000, plot_umap=True, **kwargs):
+	import scanpy as sc
+	celltypes = niches[celltype_col].unique()
+	niches_adata=sc.AnnData(niches.loc[:,celltypes])
+	sc.pp.neighbors(niches_adata, use_rep='X', **kwargs)
+	sc.tl.umap(niches_adata)
+	sc.tl.leiden(niches_adata, resolution=resolution)
+	print('Leiden clustering identified {} clusters'.format(len(niches_adata.obs.leiden.unique())))
+
+	leiden_niche = niches_adata.obs.leiden
+	niche_counts = pd.DataFrame(np.unique(leiden_niche, return_counts=True)).T.sort_values(1, ascending=False)
+	filtered_niche_idx = niche_counts[niche_counts[1]>cluster_size_filter][0].values
+	print('{} clusters left of {} cells or greater'.format(len(filtered_niche_idx), cluster_size_filter))
+	
+	niches['leiden']=leiden_niche.values
+	niches['knn_umap_X'] = niches_adata.obsm['X_umap'][:,0]
+	niches['knn_umap_Y'] = niches_adata.obsm['X_umap'][:,1]
+	if cluster_size_filter>1:
+		niches['filtered_leiden']=[x if x in filtered_niche_idx else -1 for x in niches['leiden']]
+	
+	df['knn_niche'] = niches['filtered_leiden']
+	df['knn_niche'] = df['knn_niche'].fillna(-1)
+	df['knn_niche'] = df['knn_niche'].astype('category')
+	df['knn_umap_X'] = niches['knn_umap_X']
+	df['knn_umap_Y'] = niches['knn_umap_Y']
+	
+	if plot_umap:
+		niches_adata.obs['filtered_leiden'] = niches['filtered_leiden'].astype('category')
+		sc.pl.umap(niches_adata, color=['leiden','filtered_leiden'])
+	
+	return df, niches
