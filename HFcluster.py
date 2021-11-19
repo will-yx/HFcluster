@@ -152,7 +152,7 @@ def scluster(df, markers, log = True, var_maxmean = 5, var_mindisp = -1.5, n_nei
 	#	sc.pl.highly_variable_genes(adata)
     # PCA, umap, Louvain clustering
 	#adata = adata[:, adata.var['highly_variable']]
-	sc.tl.pca(adata, n_comps=25, svd_solver='arpack', **pca_params)
+	sc.tl.pca(adata, n_comps=pcs, svd_solver='arpack', **pca_params)
 	if verbose:
 		sc.pl.pca_variance_ratio(adata, log=False)
 	sc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=pcs, metric=metric)
@@ -388,7 +388,7 @@ def CelltypeCompositionHeatmap(df, runs, colname, drop = [], save = False, outdi
 	
 	return celltype_counts
 
-def loadData(runs, path, subdir, filename_pattern, Z, RemoveHighBlankCells, DNAfilter, DNAChannel, ManualDNAthreshold, DRAQ5Channel, Zremoval, Zfilter):
+def loadData(runs, path, subdir, filename_pattern, DNAChannel, Z='z:z', RemoveHighBlankCells=True, DNAfilter=True, ManualDNAthreshold=1, DRAQ5Channel=None, Zremoval=False, Zfilter=[]):
 	data=[]
 	colnames=[]
 	for i in range(len(runs)):
