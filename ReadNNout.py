@@ -184,14 +184,6 @@ def postprocess(img_file, background_class=1, fiber_classes=[2,3,4,5], mask_open
     
   print('Finished processing {}'.format(os.path.basename(img_file)))
 
-if __name__ == '__main__' and False:
-  tstart = timer()
-  img_file = 'N:/Fiona 2020/NN Fiber Segmentation/out/run08/region1_out1_F32201W45v5_31s2v3v0ac-RG9a.png'
-  postprocess(img_file, fiber_classes=[2,3,4,5], mask_opening=5, fill_threshold=500, area_min=1000, area_max=30000, show=True, save_output=True)
-  
-  print('Total time: {:.1f}s'.format(timer()-tstart))
-
-
 def getmaskvalues(cells_df, mask, x='x:x', y='y:y'):
   xs = np.clip(np.rint(cells_df.loc[:,x].to_numpy()).astype(np.int32), 0, mask.shape[1]-1)
   ys = np.clip(np.rint(cells_df.loc[:,y].to_numpy()).astype(np.int32), 0, mask.shape[0]-1)
@@ -260,20 +252,13 @@ def run_readNN(indir, csv_pattern, NN_img_pattern, x='x:x', y='y:y', NNdir='NNou
       print('Saving csv file:\n  {}'.format(outfile))
       nuclei_df.to_csv(outfile)
       print('Done!')
-    
-    
 
 if __name__ == '__main__':
   tstart = timer()
 
-  processed_dir = 'N:/CODEX processed'
+  processed_dir = 'N:/CODEX processed' #Processed folder parent directory
 
-  runs = ['20190513_run08_20200416', '20190517_run09_postclo_20200416',\
-       '20190523_run10_postveh_20200416', '20190610_run11_postclo_20200416',\
-       '20190802_run12_preveh_20200416', '20190816_run13_postclo_20200416',\
-       '20190820_run14_postveh_20200416', '20190905_run15_28monTA_20200416',\
-       '20191018_run17_postveh3_20200416', '20191028_run18_preveh2_20200416',\
-       '20191104_run19_postclo_20200416']
+  runs = ['Run_name']
 
   for run in runs:
     indir = os.path.join(processed_dir, run)
