@@ -15,7 +15,7 @@ import scanpy as sc
 
 from kneed import KneeLocator
 from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from sklearn.semi_supervised import label_propagation
+from sklearn.semi_supervised import LabelSpreading
 
 sc.settings.verbosity = 2             # verbosity: errors (0), warnings (1), info (2), hints (3)
 sc.settings.set_figure_params(dpi=80)
@@ -292,7 +292,7 @@ def propagateLabels(df, markers, in_labels, **kwargs):
 			i = -1
 		labels.append(i)
 
-	label_spread = label_propagation.LabelSpreading(kernel=kernel, n_neighbors=n_neighbors, alpha=alpha, n_jobs=n_jobs, max_iter=max_iter, **kwargs)
+	label_spread = LabelSpreading(kernel=kernel, n_neighbors=n_neighbors, alpha=alpha, n_jobs=n_jobs, max_iter=max_iter, **kwargs)
 	label_spread.fit(markers_all, labels)
 
 	output_labels = label_spread.transduction_

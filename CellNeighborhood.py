@@ -181,8 +181,8 @@ def leiden_cluster(df, niches, celltype_col='CelltypeName', resolution=0.5, clus
 	import scanpy as sc
 	celltypes = niches[celltype_col].unique()
 	niches_adata=sc.AnnData(niches.loc[:,celltypes])
-	sc.pp.neighbors(niches_adata, use_rep='X', **kwargs)
-	sc.tl.umap(niches_adata)
+	sc.pp.neighbors(niches_adata, use_rep='X')
+	sc.tl.umap(niches_adata, **kwargs)
 	sc.tl.leiden(niches_adata, resolution=resolution)
 	print('Leiden clustering identified {} clusters'.format(len(niches_adata.obs.leiden.unique())))
 

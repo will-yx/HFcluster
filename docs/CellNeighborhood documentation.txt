@@ -1,6 +1,8 @@
 CellNeighborhood documentation
 
-CellNeighborhood contains two methods to detect spatial neighbors for index cells. The find() function is a modified version of cell neighborhood detection using spatial k-Nearest-Neighbors from Schuch et al. "Coordinated Cellular Neighborhoods Orchestrate Antitumoral Immunity at the Colorectal Cancer Invasive Front" (Cell 2020).
+CellNeighborhood contains two methods to detect spatial neighbors for index cells. 
+
+The find() function is a modified version of cell neighborhood detection using spatial k-Nearest-Neighbors from Schuch et al. "Coordinated Cellular Neighborhoods Orchestrate Antitumoral Immunity at the Colorectal Cancer Invasive Front" (Cell 2020).
 
 ######################
 CellNeighborhood.find(data_df, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 10, n_neighborhoods = 15, drop=False, plot=True)
@@ -57,4 +59,42 @@ CellNeighborhood.delaunay(data_df, cluster_col='CelltypeName', drop=[], X='x:x',
 		this df facilitates visualization of the neighborhood structure with dimensional reduction apporaches (UMAP, tSNE) and application of more advanced alternative clustering methods such as leiden/louvain, DBScan, etc. 
 
 	*** Delaunay trianglulation does not return the same number of neighbors for each cell and thus may need to be normalized prior to clustering.
+
+
+CellNeighborhood.leiden_cluster(data_df, windows, celltype_col='CelltypeName', resolution=0.5, cluster_size_filter=1000, plot_umap=True, **kwargs)
+	performs umap and leiden clustering on the windows dataframe from CellNeighborhood.find
+
+	data_df - DataFrame containing CODEX data from 1 or more tissues
+		tissues should be uniquely indexed by "RunID" and "RegionID" levels of a MultiIndex
+
+	windows - DataFrame of each cell from data_df and the classes of its k nearest neighbors (from CellNeighborhood.find)
+
+	celltype_col - column name for categorical labels of each cell
+
+	resolution - resolution parameter for leiden clustering
+
+	cluster_size_filter - minimum size of a leiden cluster, cells in clusters filtered by this step are assigned -1 as cluster label
+
+	plot_umap - boolean - choice in ploting umap embeddings of the windows
+
+	**kwargs - passed onto umap,  see scanpy.tl.umap()
+
+
+CellNeighborhood.neighborhood_enrichment(data_df, neighbor_col, celltype_col, default_col='cell_id:cell_id', save=False, **kwargs)
+	plots a heatmap of cell type enrichments within each neighborhood, uses seaborn clustermap
+
+	data_df - DataFrame containing CODEX data from 1 or more tissues
+		should have a "cell_id:cell_id" column
+
+	neighbor_col - column name for categorical labels of each neighborhood
+
+	celltype_col - column name for categorical labels of each cell
+
+	default_col - column name of a column without missing data - default: "cell_id:cell_id"
+
+	save - False or path - path to save the resulting heatmap as a svg file
+
+	**kwargs - passed onto clustermap,  see seaborn.clustermap()
+
+
 

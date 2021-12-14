@@ -1,0 +1,58 @@
+CellInteraction (CI) documentation
+
+CellInteraction contains several containers for plotting cell-cell interactions and a statistical test for estimating confidence intervals using bayes_mvs
+
+######################
+CI.neighborinteractions(df, col_name, mode='interactions', drop=False, save=False, **kwargs)
+	plots enrichment of cell types in proximity to eachother
+
+	windows - DataFrame of each cell from data_df and the classes of its k nearest neighbors (from CellNeighborhood.find)
+
+	col_name - column name of column name for categorical labels of each cell - e.g. 'CelltypeName'
+
+	mode - ['logodd', 'interactions', 'norm_interactions', 'zscore', 'pct'] - mode of normalization for calculating enrichment
+		logodd - log odd ratio - np.log2(((mean+tissue_mean)/(mean+tissue_mean).sum(axis = 1, keepdims = True))/tissue_mean)
+		interactions - raw average interaction - mean
+		norm_interactions - average interaction/expected interaction - mean/tissue_mean
+		zscore - z-score normalized - (mean-tissue_mean)/tissue_std
+		pct - percentile rank normalized
+
+	drop - False or list - list of labels to drop before analysis - e.g. ['none','unassigned']
+
+	save - False or path - path to save the resulting heatmap as a svg file
+
+	**kwargs - passed onto clustermap,  see seaborn.clustermap()
+
+	returns
+	fc - Dataframe of celltype by celltype enrichment matrix within nearest neighbors - asymmetrical matrix, source cell is y-axis, neighbors on the x-axis
+
+CI.networkmap(fc, edgemax=10, layout='circle', weight=pd.DataFrame(), sort=False, filter=None, r = 500, arc=0.02, self_edge=True, figsize=(10,10), save=False)
+	plots a network graph of interactions
+
+	fc - enrichment matrix - e.g. fc from CI.neighborinteractions
+
+	edgemax - max width of edges
+
+	layout - ['circle', 'spring', 'kamada_kawai'] or a list of positions - positions for nodes in the network 
+		circle - nodes in alphabetical order on a circle
+		spring - spring-directed layout based on edge weights see networkx.spring_layout
+		kamada-kawai - another force directed layout see networkx.kamada_kawai
+
+	weight - connection weights as an array - if empty, data from fc will be used
+
+	sort - nodes in an order, must contain all nodes
+
+	filter - simple threshold filter for edges with low weights
+
+	r - radius
+
+	arc - arc of the arrows
+
+	self-edge - signal to self
+	
+	figsize - tuple of basebill size
+
+	save - False or path - path to save the resulting image as a svg file
+
+CI.bayes_test(data, alpha, threshold)
+	
