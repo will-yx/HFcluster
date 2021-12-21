@@ -124,10 +124,12 @@ def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 1
 def delaunay_neighbors(codex_df, cluster_col='CelltypeName', drop=[], X='x:x', Y='y:y', Z='z:z'):
 	codex_df = codex_df[[type not in drop for type in codex_df[cluster_col]]]
 	celltypes = np.unique(codex_df[cluster_col])
+	lookup = dict(zip(celltypes, range(len(celltypes))))
 	runs = sorted(codex_df.index.get_level_values('RunID').unique())
 
 	delaunay_ids = pd.DataFrame()
 	delaunay_annos = pd.DataFrame()
+	delaunay_annos[cluster_col] = codex_df[cluster_col]
 	for r in runs:
 		run = codex_df[codex_df.index.get_level_values('RunID')==r]
 		regions = sorted(run.index.get_level_values('RegionID').unique())
@@ -152,7 +154,8 @@ def delaunay_neighbors(codex_df, cluster_col='CelltypeName', drop=[], X='x:x', Y
 			for cell in range(len(tissue)):
 				neighbors = neighbor_anno[indptr[cell]:indptr[cell+1]]
 				for neighbor in neighbors:
-					dummie[cell,neighbor-1] = dummie[cell,neighbor-1]+1
+					celltype_idx = lookup[neighbor]
+					dummie[cell,celltype_idx] = dummie[cell,celltype_idx]+1
 			tissue_niche_types = pd.DataFrame(dummie, index=tissue.index, columns=celltypes)
 			#append
 			delaunay_ids = delaunay_ids.append(tissue_niche_neighbors)
