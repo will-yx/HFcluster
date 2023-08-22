@@ -5,7 +5,10 @@ Requirements
 - TissueSimGPU requires Windows or Linux with CUDA 10.1+
 
 Installation
-- in command prompt: pip install -r requirements.txt
+- git clone https://github.com/will-yx/HFcluster
+- conda create -n HFcluster python=3.9
+- conda activate HFcluster
+- pip install -e HFcluster
 
 For Windows if you are having problems compiling the the following modules (python-igraph, louvain, leidenalg) try downloading pre-compiled wheels from this website
 https://www.lfd.uci.edu/~gohlke/pythonlibs/

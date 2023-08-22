@@ -3,13 +3,13 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as readme_file:
     readme = readme_file.read()
 
-requirements = ["seaborn", "plotly", "notebook", "pandas", "numpy", "scikit-learn", "scipy", "scanpy", "louvain", "leidenalg", "kneed", "dill"]
+requirements = ["seaborn", "plotly", "notebook", "pandas", "numpy", "scikit-learn", "scipy", "scanpy", "louvain", "leidenalg", "kneed", "dill", "scikit-image", "fastcluster"]
 
 setup(
     name="HFcluster",
     version="0.0.1",
     author="Yu Xin (Will) Wang",
-    author_email="willw1@stanford.edu",
+    author_email="wwang@sbodiscovery.org",
     description="Clustering and analysis tools for single cell spatial data from multiplex imaging",
     long_description=readme,
     long_description_content_type="clustering/single cell analysis",
