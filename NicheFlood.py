@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 plt.rcParams["figure.figsize"] = (30,30)
 
 import scipy.ndimage as nd
-from skimage.morphology import watershed, square
+from skimage.morphology import square
+from skimage.segmentation import watershed
 from skimage import io, measure, filters
 from ctypes import *
 from _ctypes import FreeLibrary
@@ -16,9 +17,16 @@ from skimage.future import graph
 import networkx as nx
 import seaborn as sns
 
-def fill(df, colname, outdir, runs, X='x:x', Y='y:y', NNmask=False, mask_dist=100, max_dist=1000):
-  libSpaCE = CDLL("N:/Will's CODEX pipeline/SpaCE.dll")
-  
+libSpaCE = cdll.msvcrt
+dll_path = os.path.join(os.path.dirname(__file__),'flood.dll')
+if os.path.isfile(dll_path):
+    if hasattr(os, 'add_dll_directory'):
+      for p in os.getenv('PATH').split(';'):
+        if p not in ['','.'] and os.path.isdir(p): os.add_dll_directory(p)
+    libSpaCE = CDLL(dll_path)
+else: print('Unable to find flood.dll')
+
+def fill(df, colname, outdir, runs, X='x:x', Y='y:y', NNmask=False, mask_dist=100, max_dist=1000):  
   c_neighborhood_floodfill = libSpaCE.neighborhood_floodfill
   c_neighborhood_floodfill.restype = None
   c_neighborhood_floodfill.argtypes = [POINTER(c_byte), c_int, c_int, c_int, c_int]

@@ -1,0 +1,12 @@
+seaborn
+plotly
+notebook
+pandas
+numpy
+scikit-learn
+scipy
+scanpy
+louvain
+leidenalg
+kneed
+dill

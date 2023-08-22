@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+HFcluster.egg-info/PKG-INFO
+HFcluster.egg-info/SOURCES.txt
+HFcluster.egg-info/dependency_links.txt
+HFcluster.egg-info/requires.txt
+HFcluster.egg-info/top_level.txt

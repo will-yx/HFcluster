@@ -259,8 +259,8 @@ def hierach_merge(data_all, g, label_array, axis='rows', method='distance', c=0.
 	merged_labels=pd.Series(np.asarray(merged_labels), dtype="category")
 	if axis=='rows':
 		merged_labels.index = data_all.index
-	elif axis=='cols'
-        merged_labels.index = data_all.columns
+	elif axis=='cols':
+		merged_labels.index = data_all.columns
 	return merged_labels
 
 def setParams(**kwargs):

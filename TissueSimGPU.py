@@ -14,6 +14,14 @@ import matplotlib.pyplot as plt
 from scipy.ndimage.filters import minimum_filter1d, maximum_filter1d
 from scipy.ndimage.morphology import binary_dilation, binary_erosion, binary_fill_holes
 
+libSpaCE = cdll.msvcrt
+dll_path = os.path.join(os.path.dirname(__file__),'flood.dll')
+if os.path.isfile(dll_path):
+    if hasattr(os, 'add_dll_directory'):
+      for p in os.getenv('PATH').split(';'):
+        if p not in ['','.'] and os.path.isdir(p): os.add_dll_directory(p)
+    libSpaCE = CDLL(dll_path)
+else: print('Unable to find flood.dll')
 
 def free_libs(libs):
   for lib in libs:
@@ -83,7 +91,6 @@ ds = 24 # downsample factor for determining valid tissue area
 def simulate_region(inputfile, use_cached_data=1, celltype_col='celltypeid', neighborhood_col='neighborhood', drop_clusters=[], niche_radius=133, iterations=10, min_events=1000000, cell_diameter=18, ds=24):
   cell_diameter = 3 * int(cell_diameter//3)
   
-  libSpaCE = CDLL("N:/Will's CODEX pipeline/SpaCE.dll")
   c_fixed_vs_fixed_count = libSpaCE.fixed_vs_fixed_count
   c_fixed_vs_fixed_count.restype = None
   c_fixed_vs_fixed_count.argtypes = [POINTER(c_float), POINTER(c_float), POINTER(c_int), POINTER(c_int), c_int, c_int, c_int]
