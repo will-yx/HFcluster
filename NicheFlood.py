@@ -13,7 +13,7 @@ from skimage import io, measure, filters
 from ctypes import *
 from _ctypes import FreeLibrary
 
-from skimage.future import graph
+from skimage import graph
 import networkx as nx
 import seaborn as sns
 

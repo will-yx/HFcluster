@@ -26,30 +26,23 @@ warnings.filterwarnings('ignore', category = Warning)
 import dill
 from my_fcswrite import write_fcs
 
-def preprocess(f, path, runs, subdir, filename_pattern, Z, RemoveHighBlankCells, DNAfilter, DNAChannel, ManualDNAthreshold, DRAQ5Channel, Zremoval, Zfilter, cols): #load and filter data
-    
-	run = runs[f] + '/'
-	dir = path + run + subdir
-	os.chdir(dir)
+import anndata as ad
+
+def preprocess(path, run, subdir, filename_pattern, DNAfilter, DNAChannel, ManualDNAthreshold, DRAQ5Channel, Zremoval, Zfilter, Z): 
+    #load and filter data
+	dir = os.path.join(path,run,subdir)
 
     #load data in dir
-	all_csvs = [i for i in sorted(glob.glob(filename_pattern))]
-	print("Loading "+str(runs[f]))
-	print(all_csvs)
-	regID = []
-	for i in range(len(all_csvs)):
-		regID.append(i+1)
+	csvs = [i for i in sorted(glob.glob(os.path.join(dir,filename_pattern)))]
+	print("Loading "+str(run))
+	print(csvs)
 	if filename_pattern.endswith('tsv'):
-		q_data = pd.concat([pd.read_csv(f, sep="\t") for f in all_csvs], keys=regID, names=['RegionID', 'RegCellID'])
+		q_data = pd.concat([pd.read_csv(f, sep="\t") for f in csvs], keys=[run]*len(csvs), names=['run', 'reg_cellID'])
 	else:
-		q_data = pd.concat([pd.read_csv(f) for f in all_csvs], keys=regID, names=['RegionID', 'RegCellID'])
+		q_data = pd.concat([pd.read_csv(f) for f in csvs], keys=[run]*len(csvs), names=['run', 'reg_cellID'])
 
-	allcellcount = len(q_data)
-	print(str(allcellcount)+" events found in run "+str(runs[f]))
-	if f==0:
-		cols=q_data.columns
-	else:
-		q_data.columns=cols
+	cellcount = len(q_data)
+	print(str(cellcount)+" events found in run "+str(run))
 
 	# Cell Filters
 	if Zremoval:
@@ -67,425 +60,220 @@ def preprocess(f, path, runs, subdir, filename_pattern, Z, RemoveHighBlankCells,
 			threshold = data[kn.knee]
 			print('Automatic DNA threshold: ' + str(threshold))
 		q_data = q_data.loc[q_data[DNAChannel] > threshold,:]
-		if 0:   
-			data = q_data.loc[:,DRAQ5Channel].values
-			data = sorted(data, reverse=True)
-			x = range(1,len(data)+1)
-			kn = KneeLocator(x, data, curve='convex', direction='decreasing', S=100, interp_method='interp1d')
-			threshold = data[kn.knee]
-			print('Automatic DRAQ5 threshold: ' + str(threshold))
-			q_data = q_data.loc[q_data[DRAQ5Channel] > threshold,:]
 
-	if RemoveHighBlankCells:
-		max_blanks=[i for i in q_data.columns if 'blank' in i.lower() or 'empty' in i.lower()] 
-		#print(max_blanks)
-		for i in max_blanks:
-			data = q_data.loc[:,i].values
-			if max(data)==0:
-				continue
-			else:
-				data = sorted(data, reverse=True)
-				x = range(1,len(data)+1)
-				kn = KneeLocator(x, data, curve='convex', direction='decreasing', S=1, interp_method='interp1d')
-				threshold = data[kn.knee]
-				#print(i, threshold)
-				q_data = q_data.loc[q_data[i] <= threshold,:]
-	rm_evts = allcellcount-len(q_data)
-	return q_data, cols, rm_evts
+	rm_evts = cellcount-len(q_data)
+	return q_data, rm_evts
 
-def rescale(df, stains=None, q=0.9):
+def rescale(df, stains=None, noise=0, q=0.9, center=0.5, r=10000):
         if stains == None:
                 stains = [i for i in df.columns if i.startswith('cyc')]
         rescaled = df.copy()
-        rescaled.loc[:,stains]=df.loc[:,stains].apply(lambda x: (x-x.median())/(x.quantile(q=q)-x.median())*10000, axis=0)
+        if noise: 
+            print(f'Suppressing low-end noise: {noise}')
+            rescaled.loc[:,stains]=df.loc[:,stains].apply(lambda x: x-noise, axis=0)
+            rescaled[rescaled<0]=0
+        rescaled.loc[:,stains]=rescaled.loc[:,stains].apply(lambda x: (r*(x-x.quantile(q=center))/(x.quantile(q=q)-x.quantile(q=center))), axis=0)
         return rescaled
-		
 
-# Elbow based thresholding of high confidence cells
-def find_highconf(dfs, runs, markers, sensitivity): 
-	print("Automatic thresholding for high confidence cells...")
-	sub_data=[]
-	for df in dfs:
-		x = range(1, len(df)+1)
-		tmp = elbow_sub(df.copy(), markers, sensitivity, x)
-		sub_data.append(tmp)
-	print('High confidence cells identified')
-	sub_data_all = pd.concat(sub_data, keys=runs, names=['RunID'])
-	return sub_data_all
-
-def find_highconf_normalized(df, markers, sensitivity): 
-        print("Automatic thresholding for high confidence cells...")
-        x = range(1, len(df)+1)
-        tmp = elbow_sub(df.copy(), markers, sensitivity, x)
-        print('High confidence cells identified')
-        return tmp
-
-# Elbow based background removal
-def elbow_sub(df, markers, sensitivity, x): 
-    for i in markers:
-        marker_data = df.loc[:,i].values
-        marker_data = sorted(marker_data, reverse=True)
-        kn = KneeLocator(x, marker_data, curve='convex', direction='decreasing', S=sensitivity, interp_method='interp1d')
-        threshold = marker_data[kn.knee]
-        print(i, threshold)
-        df[i]=df.loc[:,i].transform(lambda x: x-threshold)
-        df[i]=[value if value > 0 else 0 for value in df[i].values]
-    #df[df<0]=0
-    return df
-
-# Scanpy clustering
-def scluster(df, markers, log = True, var_maxmean = 5, var_mindisp = -1.5, n_neighbors=25, pcs=20, metric='euclidean', louvain_res=1.0, verbose=1, **kwargs):
-	var_params = kwargs.get('var_params',{})
-	pca_params = kwargs.get('pca_params',{})
-	umap_params = kwargs.get('umap_params',{})
-	louvain_params = kwargs.get('louvain_params',{})
-	adata = sc.AnnData(df.loc[:,markers])
-	adata = adata[:, markers]
-	#sc.pl.highest_expr_genes(adata, n_top=10)
-    #the two lines below normalize the data by log tr and min-max just before clustering
-    #for any optional normalization look up up the scanpy doc in particular anndata
-	if log: sc.pp.log1p(adata)
-	sc.pp.scale(adata, max_value = 10)
-	#adata.raw = adata
-	#sc.pp.highly_variable_genes(adata, min_mean=0, max_mean=var_maxmean, min_disp=var_mindisp, **var_params)
-	#if verbose:
-	#	sc.pl.highly_variable_genes(adata)
-    # PCA, umap, Louvain clustering
-	#adata = adata[:, adata.var['highly_variable']]
-	sc.tl.pca(adata, n_comps=pcs, svd_solver='arpack', **pca_params)
-	if verbose:
-		sc.pl.pca_variance_ratio(adata, log=False)
-	sc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=pcs, metric=metric)
-	sc.tl.umap(adata, **umap_params)
-	sc.tl.louvain(adata, resolution=louvain_res, **louvain_params)
-	louvain = adata.obs.louvain.values
-	if verbose==2:
-		sc.pl.umap(adata, color=['louvain'], cmap=plt.cm.get_cmap('jet'))
-    # Violin plot of Louvain clusters
-	if verbose==2:
-		ax = sc.pl.stacked_violin(adata, markers, groupby='louvain', rotation=90)
-		adata.obs.louvain.value_counts()
-	return louvain, adata
-
-# Manual cluster merging
-def manual_merge(g, merge_idx, X):
-    rowidx = np.array(g.dendrogram_row.reordered_ind).astype(np.int) + 1
-    len(X)
-    if sum(merge_idx) != len(X):
-        print('Index is {} for {} clusters. Re-check your merge index!'.format(sum(merge_idx), len(X)))
-    else:
-        print(len(merge_idx))
-        split = np.cumsum(merge_idx)
-        tmp = zip(chain([0], split), chain(split, [None])) 
-        res = list(rowidx[i : j] for i, j in tmp) 
-
-        merge = {}
-        merged_idx = 0
-        for i,c in enumerate(rowidx):
-            if i >= split[merged_idx]: merged_idx+=1
-            merge.update({c: merged_idx+1})
-        print(merge)
-        print('merging {} -> {} groups'.format(len(merge), len(set(merge.values()))))
-        merge_list = [merge[e] for e in unique_elements]
-        merged_labels = [merge_list[x-1] for x in output_labels]
-
-        merged_labels=pd.Series(np.asarray(merged_labels), dtype="category")
-        merged_labels.index = data_all.index
-        return merged_labels
-    
-# Automated Hierarchical Merging
-def f_dendrogram(*args, **kwargs):
-    max_d = kwargs.pop('max_d', None)
-    if max_d and 'color_threshold' not in kwargs:
-        kwargs['color_threshold'] = max_d
-    annotate_above = kwargs.pop('annotate_above', 0)
-
-    ddata = dendrogram(*args, **kwargs)
-
-    if not kwargs.get('no_plot', False):
-        plt.title('Hierarchical Clustering Dendrogram (truncated)')
-        plt.xlabel('sample index or (cluster size)')
-        plt.ylabel('distance')
-        for i, d, c in zip(ddata['icoord'], ddata['dcoord'], ddata['color_list']):
-            x = 0.5 * sum(i[1:3])
-            y = d[1]
-            if y > annotate_above:
-                plt.plot(x, y, 'o', c=c)
-                plt.annotate("%.3g" % y, (x, y), xytext=(0, -5),
-                             textcoords='offset points',
-                             va='top', ha='center')
-        if max_d:
-            plt.axhline(y=max_d, c='k')
-    return ddata
-
-def hierach_merge(data_all, g, label_array, axis='rows', method='distance', c=0.1):
-	if axis=='rows':
-		Z = g.dendrogram_row.linkage
-	elif axis=='cols':
-		Z = g.dendrogram_col.linkage
-	else: raise NameError('axis can only be "rows" or "cols"')
-		
-	if method == "distance":
-		plt.figure(figsize=(25, 10))
-		f_dendrogram(
-			Z,
-			truncate_mode='lastp',
-			p=200,
-			leaf_label_func=lambda id:id+1,
-			leaf_rotation=90.,
-			leaf_font_size=12.,
-			show_contracted=True,
-			annotate_above=10,
-			max_d=c
-		)
-		plt.show()
-		clusters = fcluster(Z, c, criterion='distance')
-	elif method == "max":
-		plt.figure(figsize=(25, 10))
-		f_dendrogram(
-			Z,
-			truncate_mode='lastp',
-			p=c,
-			leaf_label_func=lambda id:id+1,
-			leaf_rotation=90.,
-			leaf_font_size=12.,
-			show_contracted=True,
-			annotate_above=10,
-		)
-		plt.show()
-		clusters = fcluster(Z, c, criterion='maxclust')
-	else: raise NameError('method can only be "distance" or "max"')
-	merged_labels = [clusters[i-1] for i in label_array]
-	merged_labels=pd.Series(np.asarray(merged_labels), dtype="category")
-	if axis=='rows':
-		merged_labels.index = data_all.index
-	elif axis=='cols':
-		merged_labels.index = data_all.columns
-	return merged_labels
-
-def setParams(**kwargs):
-	return kwargs
-
-def propagateLabels(df, markers, in_labels, **kwargs):
-	kernel = kwargs.get('kernel', 'knn')
-	if "kernel" in kwargs:
-		del kwargs["kernel"]
-	n_neighbors = kwargs.get('n_neighbors', 5)
-	if "n_neighbors" in kwargs:
-		del kwargs["n_neighbors"]
-	alpha = kwargs.get('alpha', 0.8)
-	if "alpha" in kwargs:
-		del kwargs["alpha"]
-	n_jobs = kwargs.get('n_jobs', -1)
-	if "n_jobs" in kwargs:
-		del kwargs["n_jobs"]
-	max_iter = kwargs.get('max_iter', 150)
-	if "max_iter" in kwargs:
-		del kwargs["max_iter"]
-	
-	markers_all = df.loc[:,markers]
-
-	labels = []
-	for i in in_labels:
-		i = int(i)
-		if i == 0: 
-			i = -1
-		labels.append(i)
-
-	label_spread = LabelSpreading(kernel=kernel, n_neighbors=n_neighbors, alpha=alpha, n_jobs=n_jobs, max_iter=max_iter, **kwargs)
-	label_spread.fit(markers_all, labels)
-
-	output_labels = label_spread.transduction_
-	output_label_array = pd.Series(np.asarray(output_labels), dtype="category")
-	output_label_array.index = df.index
-	return output_label_array
-
-def loadCelltypeNames(df, outdir, filename, colname):
-	clusterID = sorted(np.unique(df[colname].values))
-
-	with open(outdir+filename) as csvdict:
-		clusterdict = {int(row[0]): row[1] for row in csv.reader(csvdict, dialect='excel')}
-
-	celltypeName = [clusterdict[i] for i in df[colname].values.astype(np.int16)]
-	celltypename2id = {name:i for i,name in enumerate(sorted(np.unique(list(clusterdict.values()))))}
-
-	(pd.DataFrame.from_dict(data=celltypename2id, orient='index').to_csv(outdir+'celltypename2id.csv', header=False))
-
-	celltypeID = [celltypename2id[name] for name in celltypeName]
-	celltypeID = pd.Series(np.asarray(celltypeID), dtype="category")
-	celltypeID.index = df.index
-
-	df['CelltypeName'] = celltypeName
-	df['CelltypeID'] = celltypeID
-	return df
-
-def ClusterMeansHeatmap(df, colname, markers, save = False, outdir = None, estimate_dist = 0, metric='correlation', method='single', cmap='viridis', standard_scale= 1, **kwargs):
-	cluster_expression = df.groupby(colname).mean()
-	cluster_expression = cluster_expression.dropna(axis=0, how='all')
-	cluster_expression = cluster_expression.loc[:,markers]
-	g = sns.clustermap(cluster_expression, metric=metric, method=method, cmap=cmap, standard_scale=standard_scale, **kwargs)
-	plt.setp(g.ax_heatmap.yaxis.get_majorticklabels(), rotation=0)
-	if save:
-		if outdir==None: 
-			print('Provide output directory as keyword argument "outdir"')
-		else:
-			newDir(outdir)
-			plt.savefig(outdir+"ClusterMeansHeatmap_"+str(colname)+".svg", format="svg")
-	
-	if estimate_dist:
-		dendro = g.dendrogram_row.linkage.copy()
-		last = dendro[:, 2]
-		last = last[:np.ceil(-len(last)/2).astype(int)]
-		last_rev = last[::-1]
-		idxs = np.arange(1, len(last) + 1)
-
-		kn = KneeLocator(idxs, last_rev, curve='convex', direction='decreasing', S=1, interp_method='polynomial')
-		merge_cutoff = last_rev[kn.knee]
-
-		#plt.plot(idxs, last_rev)
-		#kn.plot_knee_normalized()
-		print('Estimated merge distance is '+str(merge_cutoff))
-		return g, merge_cutoff
-	else: return g
-
-def CellExpressionHeatmap(df, colname, markers, save = False, outdir = None, palette=None, metric="euclidean", method="complete", cmap='viridis', vmax = 0.3, **kwargs):
-	sort_data = df.sort_values(by=[colname])
-	mergeIDs = np.unique(df[colname].astype(np.int).values)
-	if palette==None: 
-		palette = sns.color_palette("cubehelix", len(mergeIDs))
-	lut = dict(zip(mergeIDs, palette))
-	row_colors = sort_data[colname].astype(int).map(lut)
-	p = sns.clustermap(sort_data.loc[:,markers], metric=metric, method=method, cmap=cmap, row_cluster=False, row_colors=row_colors, standard_scale= 1, vmax = vmax, yticklabels=False, **kwargs)
-	for label in mergeIDs:
-		p.ax_col_dendrogram.bar(0, 0, color=lut[label],
-								label=label, linewidth=0)
-	p.ax_col_dendrogram.legend(loc="center", ncol=11)
-	if save:
-		if outdir==None: 
-			print('Provide output directory as keyword argument "outdir"')
-		else:
-			newDir(outdir)
-			plt.savefig(outdir+"CellExpressionHeatmap_"+str(colname)+".png", format="png")
-
-def CelltypeCompositionHeatmap(df, runs, colname, drop = [], save = False, outdir = None, proportions =True, metric="correlation", method="average", cmap='viridis', standard_scale= 0, figsize=(10, 30), **kwargs):
-	tissue_ids = ['{}_{}'.format(run,reg) for run, reg in zip(df.index.get_level_values('RunID'),df.index.get_level_values('RegionID'))]
-	celltype_counts = pd.get_dummies(df[colname]).groupby(tissue_ids).sum()
-	celltype_counts = celltype_counts.fillna(0)
-	celltype_counts = celltype_counts.astype('int64')
-	celltype_counts = celltype_counts.drop(drop, axis=1) #drop unassigned cluster
-	celltype_counts = celltype_counts.transpose()
-	if proportions:
-		celltype_counts = celltype_counts.apply(lambda x: x/x.sum(), axis=0)
-
-	g = sns.clustermap(celltype_counts, metric=metric, method=method, cmap=cmap, standard_scale= standard_scale, figsize=figsize, **kwargs)
-	plt.setp(g.ax_heatmap.yaxis.get_majorticklabels(), rotation=0)
-	if save:
-		if outdir==None: 
-			print('Provide output directory as keyword argument "outdir"')
-		else:
-			newDir(outdir)
-			plt.savefig(outdir+"tissuecorrelation_"+str(colname)+".svg", format="svg")
-	
-	return celltype_counts
-
-def loadData(runs, path, subdir, filename_pattern, DNAChannel, Z='z:z', RemoveHighBlankCells=True, DNAfilter=True, ManualDNAthreshold=1, DRAQ5Channel=None, Zremoval=False, Zfilter=[]):
+def loadData(runs, path, subdir, filename_pattern, Z_col='z:z', noise=0, scale=False, q=0.9, center=0.5, scale_val=10000, DNAfilter=True, ManualDNAthreshold=1, DNAChannel=None, DRAQ5Channel=None, Zremoval=False, Zfilter=[]):
 	data=[]
-	colnames=[]
-	for i in range(len(runs)):
-		tmp, colnames, filtercount = preprocess(i, path, runs, subdir, filename_pattern, Z, RemoveHighBlankCells, DNAfilter, DNAChannel, ManualDNAthreshold, DRAQ5Channel, Zremoval, Zfilter, colnames) 
+	for run in runs:
+		tmp, filtercount = preprocess(path, run, subdir, filename_pattern, DNAfilter, DNAChannel, ManualDNAthreshold, DRAQ5Channel, Zremoval, Zfilter, Z_col) 
+		if scale:
+			tmp = rescale(tmp, q=q, center=center, r=scale_val, noise=noise)
 		data.append(tmp)
-		print(filtercount,' events were removed in ',runs[i],' ',len(data[i]),' events remain')  
-	data_all = pd.concat(data, keys=runs, names=['RunID'])
+		print(filtercount,' events were removed in ',run,' ',len(tmp),' events remain')  
+	data_all = pd.concat(data)
 	data_all = data_all.reset_index()
-	data_all['CellID']=range(len(data_all))
-	data_all=data_all.set_index(['CellID', 'RunID', 'RegionID', 'RegCellID'])
+	data_all['cellID'] = range(len(data_all))
+	data_all['run_region'] = data_all['run'].astype(str)+'_'+data_all['region:region'].astype(int).astype(str)
+	data_all=data_all.set_index('cellID')
 	print(str(len(data_all))+" events for clustering")
 	return data, data_all
 
-def getMarkersforClustering(df, list):
-	markers=[]
-	for i in df.columns:
-		if any(d.lower() == i.split(':')[-1].lower() for d in list): 
-			markers.append(i)
-	print(str(len(markers))+' markers used for clustering')
-	return markers
+def conv_adata(df):
+    channels = [c for c in df.columns if c.startswith('cyc')]
+    meta_data_cols = [c for c in df.columns if c not in channels]
+    
+    adata = ad.AnnData(df[channels])
+    
+    ch_marker = adata.var.index.str.split(':',expand=True).to_frame().reset_index(drop=True).loc[:,1]
+    ch_cyc_ch = adata.var.index.str.split(':',expand=True).to_frame().reset_index(drop=True).loc[:,0].str[:-1]
+    
+    adata.var['cycle'] = ch_cyc_ch.str.split('_',expand=True).loc[:,0].str[-3:].astype(int).values
+    adata.var['fl_channel'] = ch_cyc_ch.str.split('_',expand=True).loc[:,1].str[-3:].astype(int).values
+    adata.var['marker'] = [i[:-len(i.split('_')[-1])-1] if i.split('_')[-1] in ['interior','border'] else i for i in ch_marker]
+    adata.var['quant_type'] = [i.split('_')[-1]  if i.split('_')[-1] in ['interior','border'] else 'full' for i in ch_marker]
+    adata.var['q_t'] = [i.split('_')[-1][0]  if i.split('_')[-1] in ['interior','border'] else 'f' for i in ch_marker]
+    adata.var['marker_q'] = adata.var['marker'] + '_' + adata.var['q_t']
+    adata.var = adata.var.reset_index().set_index('marker_q')
+    adata.var_names_make_unique()
+    
+    meta_data = df[meta_data_cols]
+    meta_data.columns = meta_data.columns.str.split(':',expand=True).to_frame()[0].values
+    adata.obs = meta_data
 
+    return adata
+
+def transfer_meta(adata, adata_s):
+    for i in adata_s.obs.keys():
+        if i not in adata.obs.keys():
+            adata.obs[i] = adata_s.obs[i].values
+    adata.uns = adata_s.uns
+    adata.obsm = adata_s.obsm
+    #adata.varm = adata_s.varm
+    #adata.varp = adata_s.varp
+    return adata
+
+def generateTissueArray(adata, X='x', Y='y', shift = 10000):
+    run2idx = {r:i for i,r in enumerate(sorted(np.unique(adata.obs['run'])))}
+    
+    xshift = np.asarray([(n)*shift for n in adata.obs['region'].values])
+    x = adata.obs[X].astype(int).values + xshift
+    
+    yshift = np.asarray([run2idx[n]*shift for n in adata.obs['run'].values])
+    y = adata.obs[Y].astype(int).values + yshift
+
+    adata.obs['array_x'] = x
+    adata.obs['array_y'] = y
+
+    adata.obsm['spatial'] = np.array(list(map(list,zip(adata.obs['x'].astype(int),adata.obs['y'].astype(int)))))
+    adata.obsm['tissue_array'] = np.array(list(map(list, (zip(adata.obs['array_x'].astype(int),adata.obs['array_y'].astype(int))))))
+
+    return adata
+
+import plotly.express as px
+def plotlyTissueArray(adata, color, palette='hsv', template='plotly_dark', log=False, width=900, height=600, inverty=True, **kwargs):
+    if color in adata.obs.columns:
+        c_data=adata.obs[color]
+    elif color in adata.var_names:
+        c_data=adata[:,color].X.flatten()
+        if log:
+            c_data=np.log(c_data+1)
+    else:
+        raise NameError(f'parameter {color} not found in .obs or .var') 
+    fig = px.scatter(x=adata.obs['array_x'], y=adata.obs['array_y'], color=c_data,
+                     color_discrete_sequence=palette,
+                     width=width, height=height, template=template, render_mode='webgl', **kwargs)
+    if inverty:
+        fig.update_yaxes(autorange="reversed")
+    fig.show()
+
+def loadCelltypeNames(adata, file, colname='leiden'):
+    name_dict = pd.read_csv(file,header=None, index_col=0).to_dict()[1]
+    adata.obs['celltypename'] = [name_dict[int(i)] for i in adata.obs[colname]]
+    adata.obs['celltype_id'] = adata.obs['celltypename'].astype('category').cat.codes
+    adata.obs.groupby('celltypename')['celltype_id'].mean().astype(int).to_csv('celltypename2id.csv')
+    return adata
+
+def get_cluster_proportions(adata,
+                            cluster_key="cluster_final",
+                            sample_key="replicate",
+                            drop_values=None, prop=True):
+    """
+    Input
+    =====
+    adata : AnnData object
+    cluster_key : key of `adata.obs` storing cluster info
+    sample_key : key of `adata.obs` storing sample/replicate info
+    drop_values : list/iterable of possible values of `sample_key` that you don't want
+    
+    Returns
+    =======
+    pd.DataFrame with samples as the index and clusters as the columns and 0-100 floats
+    as values
+    """
+    
+    adata_tmp = adata.copy()
+    sizes = adata.obs.groupby([cluster_key, sample_key]).size()
+    if prop: 
+        props = sizes.unstack().apply(lambda x: 100 * x / x.sum())
+    else: props = sizes.unstack()
+    #props = props.pivot(columns=sample_key, index=cluster_key).T
+    #props.index = props.index.droplevel(0)
+    props.fillna(0, inplace=True)
+    
+    if drop_values is not None:
+        for drop_value in drop_values:
+            props.drop(drop_value, axis=0, inplace=True)
+    return props
+
+
+def plot_cluster_proportions(cluster_props, 
+                             cluster_palette=None,
+                             xlabel_rotation=0, **kwargs): 
+    fig, ax = plt.subplots(dpi=300)
+    fig.patch.set_facecolor("white")
+    
+    cmap = None
+    if cluster_palette is not None:
+        cmap = sns.palettes.blend_palette(
+            cluster_palette, 
+            n_colors=len(cluster_palette), 
+            as_cmap=True)
+   
+    cluster_props.plot(
+        kind="bar", 
+        stacked=True, 
+        ax=ax, 
+        legend=None, 
+        colormap=cmap, **kwargs
+    )
+    
+    ax.legend(bbox_to_anchor=(1.01, 1), frameon=False, title="Cluster")
+    sns.despine(fig, ax)
+    ax.tick_params(axis="x", rotation=xlabel_rotation)
+    ax.set_xlabel(cluster_props.index.name.capitalize())
+    ax.set_ylabel("Proportion")
+    fig.tight_layout()
+    
+    return fig
+
+def find_highconf(ad, markers, sensitivity=10): 
+    ts = []
+    for m in markers:
+        vals = np.sort(ad[:,m].X.flatten())
+        kn=KneeLocator(range(len(vals)), vals, curve='convex', direction='increasing', S=sensitivity, interp_method='interp1d')
+        ts += [vals[kn.knee]]
+    
+    hf = ad[:,markers].X - np.array(ts)
+    hf[hf<0]=0
+
+    ad.layers['preHF'] = ad.X
+    ad.X = hf
+
+    ad.uns['HF_thresh']=dict(zip(markers,ts))
+    return ad
+    
+def load_xkcd():
+    return pd.read_csv(f"{os.path.dirname(__file__)}/xkcd_hexcol.csv").columns.values
+
+from skimage.io import imread
+
+def load_mask(adata, mask_name, path, runs, pattern='reg*png', dtype=bool):
+    masks={}
+    print(mask_name)
+    for run in runs:
+        print(run)
+        maskdir = os.path.join(path,run,mask_name)
+        maskfiles = sorted(glob.glob(os.path.join(maskdir, pattern)))
+        print(maskfiles)
+        masks[run] = [imread(img).astype(dtype) for img in maskfiles]
+    
+    mask_val = [masks[run][r-1][y,x] for run,r,x,y in zip(adata.obs['run'], adata.obs['region'].astype(int),adata.obs['x'].astype(int),adata.obs['y'].astype(int))]
+    adata.obs[mask_name] = mask_val
+    return adata
+    
 def newDir(dir):
 	if not os.path.exists(dir):
 		os.makedirs(dir)
+        
+def propagateLabels(adata, markers, labels, kernel='knn', n_neighbors=5, alpha=0.8, n_jobs=-1, max_iter=150, **kwargs):
+	vals = adata.loc[:,markers].X
 
-def loadState(outdir):
-	if os.path.isfile(outdir+'notebook_env.cache'):
-		dill.load_session(outdir+'notebook_env.cache')
-		
-def saveState(outdir):
-	newDir(outdir)
-	dill.dump_session(outdir+'notebook_env.cache')
+	label_spread = LabelSpreading(kernel=kernel, n_neighbors=n_neighbors, alpha=alpha, n_jobs=n_jobs, max_iter=max_iter, **kwargs)
+	label_spread.fit(vals, labels)
 
-def save_as_CSV(data_all, runs, outdir):
-	# Export all csv and region split csvs
-	newDir(outdir)
-	filename = outdir+'MultiRun-CombinedData.csv'
-	export_csv = data_all.to_csv (filename, index = True, header=True) #Don't forget to add '.csv' at the end of the path
-
-	regs = np.unique(data_all.index.get_level_values('RegionID').values)
-	for h, i in product(runs, regs):
-		try:
-			df = pd.DataFrame(data_all.loc[pd.IndexSlice[:,h,i],:])
-			if len(df) == 0:
-				continue
-			else:
-				outdir_run = outdir+h+'/'
-				if not os.path.exists(outdir_run):
-					os.mkdir(outdir_run)
-				filename = outdir_run+h+'_'+str(i)+'_compensated.csv'
-				export_csv = df.to_csv (filename, index=True, header=True)
-				print("Wrote data to '{:}'".format(os.path.basename(filename)))
-		except: continue
-
-def save_as_FCS(data_all, runs, outdir):
-	newDir(outdir)
-	fcs_data = data_all.copy()
-	try:
-		fcs_data = fcs_data.drop('CelltypeName', axis=1)
-		print('CelltypeName column will not be exported in the FCS file! Use CelltypeID and celltypename2id.csv in the output directory to match names to IDs.')
-	except:	print('No CelltypeName column, continuing...')
-
-	header = fcs_data.columns#[2:124]
-	channel_cycle = [h.split(':')[ 0] for h in header]
-	channel_stain = [h.split(':')[-1] for h in header]
-
-	regs = np.unique(data_all.index.get_level_values('RegionID').values)
-	for h, i in product(runs, regs):
-		try:
-			df = fcs_data.loc[pd.IndexSlice[:,h,i],:].values.astype(np.float32)
-			if len(df) == 0:
-				continue
-			else:
-				nanrows = np.isnan(df).any(axis=1)
-				outdir_run = outdir+h+'/'
-				if not os.path.exists(outdir_run):
-					os.mkdir(outdir_run)
-				filename = outdir_run+'reg{:03d}_compensated.fcs'.format(i)
-				write_fcs(filename, df, channel_stain, channel_cycle)
-				print("Wrote data to '{:}'".format(os.path.basename(filename)))
-		except: continue
-
-def generateTissueArray(df, X, Y, shift = 10000):
-	run2idx = {r:i for i,r in enumerate(sorted(np.unique(df.index.get_level_values('RunID').values)))}
-	xshift = np.swapaxes(np.asarray([[(n)*shift for n in df.index.get_level_values('RegionID').values]]), 0,1)
-	plot_data = df.copy()
-	plot_data[[X]] = plot_data[[X]].values + xshift
-	yshift = np.swapaxes(np.asarray([[run2idx[n]*shift for n in df.index.get_level_values('RunID').values]]), 0,1)
-	plot_data[[Y]] = plot_data[[Y]].values + yshift
-	return plot_data
-
-def plotlyTissueArray(plot_data, X, Y, colname, palette, template='plotly_dark', width=900, height=600, **kwargs):
-	p=plot_data
-	idx=plot_data[colname].unique()
-	fig = px.scatter(p, x=X, y=Y, color=colname,
-					 color_discrete_sequence=palette,
-					 width=width, height=height, template=template, render_mode='webgl', **kwargs)
-	fig.update_yaxes(autorange="reversed")
-	fig.show()
-
+	output_labels = label_spread.transduction_
+    
+	return output_label_array

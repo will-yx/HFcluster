@@ -10,3 +10,5 @@ louvain
 leidenalg
 kneed
 dill
+scikit-image
+fastcluster

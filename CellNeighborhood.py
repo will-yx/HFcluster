@@ -9,10 +9,9 @@ from sklearn.neighbors import NearestNeighbors
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from scipy.spatial import Delaunay
+from scipy.spatial import Delaunay 
 
-
-def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 10, n_neighborhoods = 15, drop=False, plot=False):
+def find(adata, cluster_col = 'CelltypeName', sample_col='sample', n_neighbors = 10, k_neighborhoods = 15, drop=False, plot=False):
 	
 	def get_windows(job,n_neighbors):
 		'''
@@ -27,10 +26,10 @@ def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 1
 		print ("Processing tissues:", str(idx+1)+'/'+str(len(exps)),': ' + exps[idx])
 
 		tissue = tissue_group.get_group(tissue_name)
-		to_fit = tissue.loc[indices][[X,Y]].values
+		to_fit = tissue.loc[indices][['x','y']].values
 
-	#    fit = NearestNeighbors(n_neighbors=n_neighbors+1).fit(tissue[[X,Y]].values)
-		fit = NearestNeighbors(n_neighbors=n_neighbors).fit(tissue[[X,Y]].values)
+	#    fit = NearestNeighbors(n_neighbors=n_neighbors+1).fit(tissue['x','y']].values)
+		fit = NearestNeighbors(n_neighbors=n_neighbors).fit(tissue[['x','y']].values)
 		m = fit.kneighbors(to_fit)
 	#    m = m[0][:,1:], m[1][:,1:]
 		m = m[0], m[1]
@@ -46,31 +45,28 @@ def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 1
 		#print ("Finishing:", str(idx+1)+"/"+str(len(exps)),": "+ exps[idx],end_time-job_start,end_time-start_time)
 		return neighbors.astype(np.int32)
 	
-	reg = 'Sample'
-	keep_cols = [X,Y,reg,cluster_col]
+	keep_cols = ['x','y',sample_col,cluster_col]
 
 	#in the line below set the K for the KNN based neighbohood definition (window size)
 
 	#the line below sets K for the K-means
-	neighborhood_name = "neighborhood"+str(k)
+	neighborhood_name = "neighborhood"+str(n_neighbors)
 
-	neighbor_data = data_all.loc[:,[X, Y, cluster_col]]
-	if drop:
-		neighbor_data = neighbor_data.loc[[type not in drop for type in neighbor_data[cluster_col]]]
+	neighbor_data = pd.DataFrame([adata.obsm['spatial'][:,0],adata.obsm['spatial'][:,1], adata.obs[sample_col],adata.obs[cluster_col].values], columns=adata.obs.index, index=keep_cols).T
+
 	celltypes = neighbor_data[cluster_col].unique().tolist()
-	neighbor_data[reg] = neighbor_data.index.get_level_values('RunID') + "_" + neighbor_data.index.get_level_values('RegionID').map(str)
-	files = neighbor_data.Sample.unique().tolist()
+	files = neighbor_data[sample_col].unique().tolist()
 
-	cells = pd.concat([neighbor_data.reset_index(drop = True),pd.get_dummies(neighbor_data.reset_index(drop = True)[cluster_col])],1)
+	cells = pd.concat([neighbor_data.reset_index(drop = True),pd.get_dummies(neighbor_data.reset_index(drop = True)[cluster_col])],axis=1)
 	sum_cols = cells[cluster_col].unique()
 	values = cells[sum_cols].values
 
 	#find windows for each cell in each tissue region
 
-	tissue_group = cells[[X,Y,reg]].groupby(reg)
-	exps = list(cells[reg].unique())
+	tissue_group = cells[['x','y',sample_col]].groupby(sample_col)
+	exps = list(cells[sample_col].unique())
 	tissue_chunks = [(time.time(),files.index(t),t,a) for t,indices in tissue_group.groups.items() for a in np.array_split(indices,1)]
-	tissues = np.array([get_windows(job,k) for job in tissue_chunks])
+	tissues = np.array([get_windows(job,n_neighbors) for job in tissue_chunks])
 
 	#for each cell and its nearest neighbors, reshape and count the number of each cell type in those neighbors.
 	out_dict = {}
@@ -78,16 +74,16 @@ def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 1
 		chunk = np.arange(len(neighbors))#indices
 		tissue_name = job[2]
 		indices = job[3]
-		window = values[neighbors[:,:k].flatten()].reshape(len(neighbors),k,len(sum_cols)).sum(axis = 1)
-		out_dict[(tissue_name,k)] = (window.astype(np.float16),indices)
+		window = values[neighbors[:,:n_neighbors].flatten()].reshape(len(neighbors),n_neighbors,len(sum_cols)).sum(axis = 1)
+		out_dict[(tissue_name,n_neighbors)] = (window.astype(np.float16),indices)
 
 	#concatenate the summed windows and combine into one dataframe for each window size tested.
-	window = pd.concat([pd.DataFrame(out_dict[(exp,k)][0],index = out_dict[(exp,k)][1].astype(int),columns = sum_cols) for exp in exps],0)
+	window = pd.concat([pd.DataFrame(out_dict[(exp,n_neighbors)][0],index = out_dict[(exp,n_neighbors)][1].astype(int),columns = sum_cols) for exp in exps],axis=0)
 	window = window.loc[cells.index.values]
-	window = pd.concat([cells[keep_cols],window],1)
+	window = pd.concat([cells[keep_cols],window],axis=1)
 	window.index = neighbor_data.index
 
-	km = MiniBatchKMeans(n_clusters = n_neighborhoods,random_state=0)
+	km = MiniBatchKMeans(n_clusters = k_neighborhoods,random_state=0)
 	labelskm = km.fit_predict(window[sum_cols].values)
 	k_centroids = km.cluster_centers_
 	cells[neighborhood_name] = labelskm
@@ -101,25 +97,16 @@ def find(data_all, outdir, X='x:x', Y='y:y', cluster_col = 'CelltypeName', k = 1
 		fc = np.log2(((niche_clusters+tissue_avgs)/(niche_clusters+tissue_avgs).sum(axis = 1, keepdims = True))/tissue_avgs)
 		fc = pd.DataFrame(fc,columns = sum_cols)
 		divergmap = sns.diverging_palette(250, 1, s=90, l=50, sep=10, center='light', as_cmap=True)
-		s=sns.clustermap(fc.loc[:,celltypes], vmin =-2,vmax = 2,cmap = divergmap, metric="euclidean", method="ward", row_cluster = True, figsize = (30,30))
+		s=sns.clustermap(fc.loc[:,celltypes], vmin =-2,vmax = 2,cmap = divergmap, metric="euclidean", method="ward", row_cluster = True, figsize = (10,10))
 		ax = s.ax_heatmap
 		ax.set_xlabel("Celltypes")
 		ax.set_ylabel("kmeans_neighborhood IDs")
-		plt.savefig(outdir+"compositions_"+neighborhood_name+".svg", format="svg")
 
-	neighborID = cells[neighborhood_name].astype('category')
-	if drop:
-		for i in range(len(drop)):
-			if i ==0:
-				assigned = data_all.loc[data_all[cluster_col] != drop[i]]
-			else:
-				assigned = assigned.loc[assigned[cluster_col] != drop[i]]
-		neighborID.index = assigned.index
-	else:
-		neighborID.index = data_all.index
-	data_all['kmeans_neighborhood'] = neighborID
-	data_all['kmeans_neighborhood'] = data_all['kmeans_neighborhood'].cat.add_categories([-1]).fillna(-1)
-	return data_all, window
+	neighborIDs = cells[neighborhood_name].astype('category')
+	adata.obs['kmeans_neighborhood']=neighborIDs.values
+	adata.uns['spatial_neighborhood'] = {'n_neighbors':n_neighbors, 'k-means':k_neighborhoods}
+
+	return adata, window
 
 def delaunay_neighbors(codex_df, cluster_col='CelltypeName', drop=[], X='x:x', Y='y:y', Z='z:z'):
 	codex_df = codex_df[[type not in drop for type in codex_df[cluster_col]]]
@@ -162,25 +149,8 @@ def delaunay_neighbors(codex_df, cluster_col='CelltypeName', drop=[], X='x:x', Y
 			delaunay_annos = delaunay_annos.append(tissue_niche_types)
 	return delaunay_ids, delaunay_annos	
 
-def neighborhood_enrichment(df, neighbor_col, celltype_col, default_col='cell_id:cell_id', save=False, **kwargs):
-	tissue_avgs = df.groupby(celltype_col).count()[default_col]
-	tissue_avgs = tissue_avgs/sum(tissue_avgs)
-	niche_clusters = df.groupby([neighbor_col,celltype_col]).count()[default_col].reset_index().pivot(index=neighbor_col,columns=celltype_col).apply(lambda x: x/sum(x), axis=1)
-	niche_clusters.columns = niche_clusters.columns.droplevel()
-
-	fc = np.log2((niche_clusters+tissue_avgs)/(niche_clusters+tissue_avgs).values.sum(axis=1,keepdims=True)/tissue_avgs)
-
-	divergmap = sns.diverging_palette(250, 1, s=90, l=50, sep=10, center='light', as_cmap=True)
-	s=sns.clustermap(fc, cmap=divergmap, **kwargs)
-	ax = s.ax_heatmap
-	ax.set_xlabel("Celltypes")
-	ax.set_ylabel("Neighborhood IDs")
-
-	if save:
-		plt.savefig(save+".svg", format="svg")
-	return fc, s
 		
-def leiden_cluster(df, niches, celltype_col='CelltypeName', resolution=0.5, cluster_size_filter=1000, plot_umap=True, **kwargs):
+def leiden_cluster(adata, niches, celltype_col='CelltypeName', resolution=0.5, cluster_size_filter=1000, plot_umap=True, **kwargs):
 	import scanpy as sc
 	celltypes = niches[celltype_col].unique()
 	niches_adata=sc.AnnData(niches.loc[:,celltypes])
@@ -200,14 +170,16 @@ def leiden_cluster(df, niches, celltype_col='CelltypeName', resolution=0.5, clus
 	if cluster_size_filter>1:
 		niches['filtered_leiden']=[x if x in filtered_niche_idx else -1 for x in niches['leiden']]
 	
-	df['knn_niche'] = niches['filtered_leiden']
-	df['knn_niche'] = df['knn_niche'].fillna(-1)
-	df['knn_niche'] = df['knn_niche'].astype('category')
-	df['knn_umap_X'] = niches['knn_umap_X']
-	df['knn_umap_Y'] = niches['knn_umap_Y']
+	adata.obs['knn_niche'] = niches['filtered_leiden']
+	adata.obs['knn_niche'] = adata.obs['knn_niche'].fillna(-1)
+	adata.obs['knn_niche'] = adata.obs['knn_niche'].astype('category')
+	adata.obsm['neighborhood_umap_X'] = niches['knn_umap_X'].values
+	adata.obsm['neighborhood_umap_Y'] = niches['knn_umap_Y'].values
 	
 	if plot_umap:
 		niches_adata.obs['filtered_leiden'] = niches['filtered_leiden'].astype('category')
-		sc.pl.umap(niches_adata, color=['leiden','filtered_leiden'])
+		sc.pl.umap(niches_adata, color=['leiden'])
+		plt.show()
+		sc.pl.umap(niches_adata, color=['filtered_leiden'])
 	
-	return df, niches
+	return adata, niches
