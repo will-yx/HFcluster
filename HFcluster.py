@@ -155,6 +155,7 @@ def plotlyTissueArray(adata, color, palette='hsv', template='plotly_dark', log=F
     fig = px.scatter(x=adata.obs['array_x'], y=adata.obs['array_y'], color=c_data,
                      color_discrete_sequence=palette,
                      width=width, height=height, template=template, render_mode='webgl', **kwargs)
+    fig.update_traces(marker=dict(line=dict(width=0)))
     if inverty:
         fig.update_yaxes(autorange="reversed")
     fig.show()

@@ -183,3 +183,21 @@ def leiden_cluster(adata, niches, celltype_col='CelltypeName', resolution=0.5, c
 		sc.pl.umap(niches_adata, color=['filtered_leiden'])
 	
 	return adata, niches
+    
+def neighborhood_enrichment(df, neighbor_col, celltype_col, default_col='cell_id:cell_id', save=False, **kwargs):
+	tissue_avgs = df.groupby(celltype_col).count()[default_col]
+	tissue_avgs = tissue_avgs/sum(tissue_avgs)
+	niche_clusters = df.groupby([neighbor_col,celltype_col]).count()[default_col].reset_index().pivot(index=neighbor_col,columns=celltype_col).apply(lambda x: x/sum(x), axis=1)
+	niche_clusters.columns = niche_clusters.columns.droplevel()
+
+	fc = np.log2((niche_clusters+tissue_avgs)/(niche_clusters+tissue_avgs).values.sum(axis=1,keepdims=True)/tissue_avgs)
+
+	divergmap = sns.diverging_palette(250, 1, s=90, l=50, sep=10, center='light', as_cmap=True)
+	s=sns.clustermap(fc, cmap=divergmap, **kwargs)
+	ax = s.ax_heatmap
+	ax.set_xlabel("Celltypes")
+	ax.set_ylabel("Neighborhood IDs")
+
+	if save:
+		plt.savefig(save+".svg", format="svg")
+	return fc, s
