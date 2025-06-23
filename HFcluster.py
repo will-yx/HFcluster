@@ -208,11 +208,9 @@ def plot_cluster_proportions(cluster_props,
     
     cmap = None
     if cluster_palette is not None:
-        cmap = sns.palettes.blend_palette(
-            cluster_palette, 
-            n_colors=len(cluster_palette), 
-            as_cmap=True)
+        cmap = cluster_palette
    
+    print(cmap)
     cluster_props.plot(
         kind="bar", 
         stacked=True, 

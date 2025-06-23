@@ -6,9 +6,9 @@ from matplotlib.patches import Arc, RegularPolygon
 from numpy import radians as rad
 
 def neighborinteractions(df, col_name, mode='interactions', drop=False, save=False, **kwargs):
-	tissue_mean = np.array(df.iloc[:,4:-2].astype(np.int64).sum()/len(df))
-	celltypes = df.iloc[:,4:-2].columns
-	centroids = df.iloc[:,4:-2].groupby(df[col_name]).mean().values
+	tissue_mean = np.array(df.iloc[:,:-1].astype(np.int64).sum()/len(df))
+	celltypes = df.iloc[:,:-1].columns
+	centroids = df.iloc[:,:-1].groupby(df[col_name]).mean().values
 	clusters = sorted(df[col_name].unique())
 	
 	if mode=='logodd':
@@ -18,10 +18,10 @@ def neighborinteractions(df, col_name, mode='interactions', drop=False, save=Fal
 	elif mode=='norm_interactions':
 		fc = centroids/tissue_mean
 	elif mode=='zscore':
-		tissue_std = np.array(df.iloc[:,4:-2].astype(np.int64).std())
+		tissue_std = np.array(df.iloc[:,:-1].astype(np.int64).std())
 		fc = (centroids-tissue_mean)/tissue_std
 	elif mode=='pct':
-		fc = df.iloc[:,4:-2].rank(axis=0, pct = True, numeric_only=True).groupby(df[col_name]).mean()
+		fc = df.iloc[:,:-1].rank(axis=0, pct = True, numeric_only=True).groupby(df[col_name]).mean()
 	else: raise NameError('mode not found. Choose between "interactions", "norm_interactions", "logodd", "pct".')
 	fc = pd.DataFrame(fc,columns = celltypes, index=clusters)
 	if mode=='logodd':
@@ -66,7 +66,7 @@ def drawCirc(ax,radius,centX,centY,angle_,theta2_,weight,color_='black'):
     )
     # Make sure you keep the axes scaled or else arrow will distort
 
-def networkmap(df, edgemax=10, layout='circle', weight=pd.DataFrame(), sort=False, filter=None, r = 500, arc=0.02, self_edge=True, figsize=(10,10), save=False):
+def networkmap(df, edgemax=10, layout='circle', weight=pd.DataFrame(), sort=False, order=None, filter=None, r = 500, arc=0.02, self_edge=True, figsize=(10,10), save=False, node_size=None, node_weights=None, node_colors=None):
 	plt.figure(figsize=figsize)
 	G = nx.MultiDiGraph()
 	#Cell types as nodes
@@ -107,7 +107,10 @@ def networkmap(df, edgemax=10, layout='circle', weight=pd.DataFrame(), sort=Fals
 
 	#sort nodes by rank or edges
 	if not sort:
-		sorted_nodes=G.nodes
+		if order==None:
+			sorted_nodes=G.nodes
+		else:
+			sorted_nodes=order
 	elif sort == 'edges':
 		sorted_nodes = sorted([(len(list(nx.all_neighbors(G, node))),node) for node in G.nodes], reverse=1)
 		sorted_nodes = [node[1] for node in sorted_nodes]
@@ -142,9 +145,12 @@ def networkmap(df, edgemax=10, layout='circle', weight=pd.DataFrame(), sort=Fals
 		if G[s][e][k]['weight'] <= 0:
 			G[s][e][k]['color']='blue'
 				
-	node_size=[len(G[node])*50 for node in G.nodes]
-	node_weights = [np.sum([np.abs(G[node][celltype][0]['weight']) for celltype in list(G[node])]) for node in G.nodes]
-	node_color= [((node_weight/max(node_weights)),0,1-(node_weight/max(node_weights)),1,) for node_weight in node_weights]
+	if node_size==None:	
+		node_size=[len(G[node])*50 for node in G.nodes]
+	if node_weights==None:
+		node_weights = [np.sum([np.abs(G[node][celltype][0]['weight']) for celltype in list(G[node])]) for node in G.nodes]
+	if node_colors==None:    
+		node_colors = [((node_weight/max(node_weights)),0,1-(node_weight/max(node_weights)),1,) for node_weight in node_weights]
 	#node_color=[(1-(len(G[node])/(max(node_size)/50)),1,(len(G[node])/(max(node_size)/50))) for node in G.nodes]
 
 	ax = plt.gca()
@@ -165,7 +171,7 @@ def networkmap(df, edgemax=10, layout='circle', weight=pd.DataFrame(), sort=Fals
 		
 
 	nx.draw_networkx_nodes(G, pos,
-						   node_color=node_color,#'0.85',
+						   node_color=node_colors,#'0.85',
 						   node_size=node_size,
 						   alpha=1)
 	nx.draw_networkx_labels(G, {p:[pos[p][0],pos[p][1]-20] for p in pos}, font_size=10)
